@@ -1,0 +1,36 @@
+{
+    "module_name": "pitch_profiler",
+    "display_name": "Pitch Profiler",
+    "version": "1.0.0",
+    "description": "Advanced baseball pitching analysis tool with movement profiles, usage patterns, and comprehensive reporting",
+    "author": "Datanalytics.pro",
+    "blueprint_path": "blueprint.bp",
+    "permission_dashboard_key": "pitch_profiler",
+    "icon_class": "bi-bullseye",
+    "database": {
+        "required": false,
+        "echo": false
+    },
+    "analytics": {
+        "data_sources": ["statcast", "csv_upload"],
+        "output_formats": ["pdf", "png", "interactive"]
+    },
+    "module_requirements_file": "requirements.txt",
+    "dependencies": {
+        "python_version": ">=3.8",
+        "platform_version": ">=1.0.0"
+    },
+    "features": [
+        "CSV data upload",
+        "Pitch movement analysis",
+        "Usage pattern analysis", 
+        "Location heatmaps",
+        "Batted ball statistics",
+        "PDF report generation",
+        "Interactive visualizations"
+    ],
+    "data_retention": {
+        "uploaded_files": "session",
+        "generated_reports": "temporary"
+    }
+}

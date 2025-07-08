@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-6 mb-4">
+                <i class="bi bi-bullseye me-2"></i>Pitch Profiler
+            </h1>
+            <p class="lead">Advanced baseball pitching analysis and reporting tool</p>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-graph-up-arrow me-2"></i>Interactive Analysis Dashboard
+                    </h5>
+                    <p class="card-text">
+                        Access the full interactive Pitch Profiler dashboard with real-time analysis, 
+                        file uploads, and comprehensive reporting capabilities.
+                    </p>
+                    <a href="{{ url_for('dashboard.index') }}pitch_profiler/dash/" class="btn btn-primary btn-lg">
+                        <i class="bi bi-play-circle me-2"></i>Launch Pitch Profiler
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-upload me-2"></i>CSV Data Upload
+                    </h5>
+                    <p class="card-text">
+                        Upload Statcast CSV files to analyze pitch movement, velocity, 
+                        spin rate, and location data with interactive visualizations.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Drag & drop file upload</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Automatic data validation</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Real-time processing</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-bar-chart-line me-2"></i>Movement Analysis
+                    </h5>
+                    <p class="card-text">
+                        Comprehensive pitch movement profiles showing horizontal and 
+                        vertical break with detailed metrics for each pitch type.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Interactive movement plots</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Pitch-by-pitch analysis</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Statistical summaries</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-geo-alt me-2"></i>Location Heatmaps
+                    </h5>
+                    <p class="card-text">
+                        Visualize pitch location patterns with strike zone heatmaps 
+                        from the catcher's perspective.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Strike zone overlay</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Density mapping</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Location tendencies</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-file-earmark-pdf me-2"></i>PDF Reports
+                    </h5>
+                    <p class="card-text">
+                        Generate comprehensive PDF reports with all analysis, 
+                        visualizations, and detailed statistics.
+                    </p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Professional formatting</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Complete analysis</li>
+                        <li><i class="bi bi-check-circle text-success me-2"></i>Downloadable reports</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-info-circle me-2"></i>Supported Data Format
+                    </h5>
+                    <p class="card-text">
+                        The Pitch Profiler works with standard Statcast CSV files containing pitch-by-pitch data.
+                        Required columns include: player_name, pitch_name, release_speed, pfx_x, pfx_z, 
+                        plate_x, plate_z, description, events, and other standard Statcast fields.
+                    </p>
+                    <a href="{{ url_for('pitch_profiler.about') }}" class="btn btn-outline-primary">
+                        Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

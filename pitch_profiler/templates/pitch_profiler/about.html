@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-6 mb-4">
+                <i class="bi bi-info-circle me-2"></i>About Pitch Profiler
+            </h1>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Overview</h5>
+                    <p class="card-text">
+                        The Pitch Profiler is an advanced baseball analytics tool designed to provide 
+                        comprehensive analysis of pitching performance using Statcast data. It offers 
+                        detailed insights into pitch movement, velocity, location patterns, and 
+                        effectiveness metrics.
+                    </p>
+                    
+                    <h5 class="card-title mt-4">Key Features</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul>
+                                <li><strong>Movement Analysis:</strong> Horizontal and vertical break analysis with visual profiles</li>
+                                <li><strong>Usage Patterns:</strong> Pitch frequency and performance metrics</li>
+                                <li><strong>Location Mapping:</strong> Strike zone heatmaps and location tendencies</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul>
+                                <li><strong>Performance Metrics:</strong> CSW%, K%, BB%, and advanced statistics</li>
+                                <li><strong>Interactive Visualizations:</strong> Plotly-powered charts and graphs</li>
+                                <li><strong>PDF Reporting:</strong> Professional analysis reports</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <h5 class="card-title mt-4">Data Requirements</h5>
+                    <p class="card-text">
+                        The Pitch Profiler requires CSV files with Statcast pitch-by-pitch data. 
+                        The following columns are essential for proper analysis:
+                    </p>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Column</th>
+                                    <th>Description</th>
+                                    <th>Required</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>player_name</code></td>
+                                    <td>Pitcher's name</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>pitch_name</code></td>
+                                    <td>Pitch type (FF, SL, CH, etc.)</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>release_speed</code></td>
+                                    <td>Pitch velocity in mph</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>pfx_x</code>, <code>pfx_z</code></td>
+                                    <td>Horizontal and vertical movement</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>plate_x</code>, <code>plate_z</code></td>
+                                    <td>Pitch location coordinates</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>description</code></td>
+                                    <td>Pitch outcome description</td>
+                                    <td><span class="badge bg-success">Yes</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>events</code></td>
+                                    <td>At-bat outcome events</td>
+                                    <td><span class="badge bg-warning">Optional</span></td>
+                                </tr>
+                                <tr>
+                                    <td><code>release_spin_rate</code></td>
+                                    <td>Spin rate in RPM</td>
+                                    <td><span class="badge bg-warning">Optional</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <h5 class="card-title mt-4">Analysis Outputs</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Movement Profile</h6>
+                            <ul>
+                                <li>Horizontal vs. vertical break scatter plot</li>
+                                <li>Pitch type clustering</li>
+                                <li>Average movement by pitch type</li>
+                                <li>Break magnitude circles</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Usage & Performance</h6>
+                            <ul>
+                                <li>Pitch frequency analysis</li>
+                                <li>Called Strike + Whiff (CSW) rates</li>
+                                <li>Velocity and spin rate averages</li>
+                                <li>Comparative pitch metrics</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <h5 class="card-title mt-4">Technical Specifications</h5>
+                    <ul>
+                        <li><strong>Framework:</strong> Dash (Plotly) for interactive visualizations</li>
+                        <li><strong>Data Processing:</strong> Pandas for data manipulation and analysis</li>
+                        <li><strong>Visualization:</strong> Plotly for charts and graphs</li>
+                        <li><strong>Reporting:</strong> ReportLab for PDF generation</li>
+                        <li><strong>File Support:</strong> CSV upload via drag-and-drop interface</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Quick Start</h5>
+                    <ol>
+                        <li>Click "Launch Pitch Profiler" to open the dashboard</li>
+                        <li>Upload your Statcast CSV file</li>
+                        <li>Review the automated analysis</li>
+                        <li>Explore different visualization tabs</li>
+                        <li>Generate and download PDF reports</li>
+                    </ol>
+                    
+                    <hr>
+                    
+                    <h6>Supported File Types</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>CSV files</li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <h6>Version Information</h6>
+                    <p class="small text-muted mb-1">Version: 1.0.0</p>
+                    <p class="small text-muted mb-1">Last Updated: {{ moment().format('MMMM YYYY') }}</p>
+                    <p class="small text-muted">Compatible with Datanalytics.pro Platform</p>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6 class="card-title">Need Help?</h6>
+                    <p class="card-text small">
+                        For questions about data format or analysis methods, 
+                        contact your system administrator.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('pitch_profiler.index') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Pitch Profiler
+                </a>
+                <a href="{{ url_for('dashboard.index') }}pitch_profiler/dash/" class="btn btn-primary">
+                    <i class="bi bi-play-circle me-2"></i>Launch Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
