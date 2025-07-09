@@ -1,6 +1,6 @@
 {
     "module_name": "pitch_profiler",
-    "display_name": "Pitch Profiler",
+    "display_name": "Pitcher Profiler",
     "version": "1.0.0",
     "description": "Advanced baseball pitching analysis tool with movement profiles, usage patterns, and comprehensive reporting",
     "author": "Datanalytics.pro",

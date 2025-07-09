@@ -1,7 +1,7 @@
 # app/modules/pitch_profiler/dash_app.py
 """
-Pitch Profiler Dash Application
-Advanced baseball pitching analysis tool converted from Streamlit to Dash
+Complete Enhanced Pitcher Profiler Dash Application
+Advanced baseball pitching analysis tool with comprehensive features matching Streamlit version
 """
 
 import dash
@@ -44,6 +44,154 @@ def calculate_k_bb_percentages(df):
     k_pct = (strikeouts / total_pa * 100) if total_pa > 0 else 0
     bb_pct = (walks / total_pa * 100) if total_pa > 0 else 0
     return k_pct, bb_pct, total_pa, strikeouts, walks
+
+def analyze_pitch_usage_by_count(df):
+    """Analyze pitch usage patterns by count"""
+    df['count'] = df['balls'].astype(str) + '-' + df['strikes'].astype(str)
+    
+    usage_by_count = df.groupby(['count', 'pitch_name_full']).size().unstack(fill_value=0)
+    usage_by_count_pct = usage_by_count.div(usage_by_count.sum(axis=1), axis=0) * 100
+    
+    return usage_by_count_pct
+
+def calculate_batting_stats(data):
+    """Calculate batting statistics against the pitcher"""
+    ab_events = ['single', 'double', 'triple', 'home_run', 'field_out', 'strikeout',
+                 'strikeout_double_play', 'double_play', 'grounded_into_double_play',
+                 'fielders_choice', 'fielders_choice_out', 'force_out', 'batter_interference']
+    pa_events = ab_events + ['walk', 'intent_walk', 'hit_by_pitch', 'sac_fly', 'sac_fly_double_play']
+    
+    at_bats_count = data['events'].isin(ab_events).sum()
+    plate_appearances_count = data['events'].isin(pa_events).sum()
+    hits = data['events'].isin(['single', 'double', 'triple', 'home_run']).sum()
+    walks = data['events'].isin(['walk', 'intent_walk']).sum()
+    hbp = data['events'].isin(['hit_by_pitch']).sum()
+    
+    singles = data[data['events'] == 'single']['events'].count()
+    doubles = data[data['events'] == 'double']['events'].count()
+    triples = data[data['events'] == 'triple']['events'].count()
+    home_runs = data[data['events'] == 'home_run']['events'].count()
+    
+    total_bases = singles + (2 * doubles) + (3 * triples) + (4 * home_runs)
+    
+    avg = hits / at_bats_count if at_bats_count > 0 else 0
+    obp = (hits + walks + hbp) / plate_appearances_count if plate_appearances_count > 0 else 0
+    slg = total_bases / at_bats_count if at_bats_count > 0 else 0
+    ops = obp + slg
+    
+    return pd.Series({
+        'AVG': avg, 'OBP': obp, 'SLG': slg, 'OPS': ops,
+        'PA': plate_appearances_count, 'AB': at_bats_count, 'H': hits,
+        '1B': singles, '2B': doubles, '3B': triples, 'HR': home_runs
+    })
+
+def calculate_detailed_stats(df):
+    """Calculate comprehensive pitching statistics including batted ball and batting analysis"""
+    stats = {}
+    
+    # Basic counts
+    stats['total_pitches'] = len(df)
+    stats['total_strikes'] = len(df[df['type'] == 'S'])
+    stats['total_balls'] = len(df[df['type'] == 'B'])
+    stats['total_hits'] = len(df[df['type'] == 'X'])
+    
+    # Strike rate
+    stats['strike_rate'] = (stats['total_strikes'] / stats['total_pitches']) * 100
+    
+    # First strike percentage
+    first_pitches = df[df['pitch_number'] == 1]
+    first_strikes = first_pitches[first_pitches['type'] == 'S']
+    stats['first_strike_pct'] = (len(first_strikes) / len(first_pitches)) * 100 if len(first_pitches) > 0 else 0
+    
+    # Swinging strike rate
+    swinging_strikes = df[df['description'].isin(['swinging_strike', 'swinging_strike_blocked'])]
+    swings = df[df['description'].isin(['swinging_strike', 'swinging_strike_blocked', 'foul', 'foul_tip', 'hit_into_play'])]
+    stats['swinging_strike_rate'] = (len(swinging_strikes) / len(swings)) * 100 if len(swings) > 0 else 0
+    
+    # Zone analysis
+    if 'zone' in df.columns:
+        in_zone = df[df['zone'].isin([1, 2, 3, 4, 5, 6, 7, 8, 9])]
+        stats['zone_rate'] = (len(in_zone) / len(df)) * 100
+        
+        # Chase rate (swings at pitches outside zone)
+        out_zone = df[~df['zone'].isin([1, 2, 3, 4, 5, 6, 7, 8, 9])]
+        out_zone_swings = out_zone[out_zone['description'].isin(['swinging_strike', 'swinging_strike_blocked', 'foul', 'foul_tip', 'hit_into_play'])]
+        stats['chase_rate'] = (len(out_zone_swings) / len(out_zone)) * 100 if len(out_zone) > 0 else 0
+    
+    # Velocity stats
+    stats['avg_velocity'] = df['release_speed'].mean()
+    stats['max_velocity'] = df['release_speed'].max()
+    stats['min_velocity'] = df['release_speed'].min()
+    
+    # Spin rate stats (if available)
+    if 'release_spin_rate' in df.columns and not df['release_spin_rate'].isna().all():
+        stats['avg_spin_rate'] = df['release_spin_rate'].mean()
+        stats['max_spin_rate'] = df['release_spin_rate'].max()
+        stats['min_spin_rate'] = df['release_spin_rate'].min()
+    
+    # BATTED BALL ANALYSIS
+    batted_balls = df[df['description'] == 'hit_into_play'].copy()
+    batted_ball_stats = {}
+    
+    if not batted_balls.empty and 'launch_speed' in batted_balls.columns:
+        # Hard hit analysis
+        hard_hit_threshold = 95
+        batted_balls['is_hard_hit'] = batted_balls['launch_speed'] >= hard_hit_threshold
+        
+        total_hard_hit_pct = batted_balls['is_hard_hit'].mean() * 100
+        hard_hit_by_pitch = batted_balls.groupby('pitch_name_full')['is_hard_hit'].mean() * 100
+        
+        # xwOBA analysis
+        if 'estimated_woba_using_speedangle' in batted_balls.columns:
+            xwoba_threshold = 0.350
+            batted_balls['is_high_xwoba'] = batted_balls['estimated_woba_using_speedangle'] >= xwoba_threshold
+            total_high_xwoba_pct = batted_balls['is_high_xwoba'].mean() * 100
+            high_xwoba_by_pitch = batted_balls.groupby('pitch_name_full')['is_high_xwoba'].mean() * 100
+        else:
+            total_high_xwoba_pct = 0
+            high_xwoba_by_pitch = pd.Series()
+        
+        batted_ball_stats = {
+            'total_hard_hit_pct': total_hard_hit_pct,
+            'hard_hit_by_pitch': hard_hit_by_pitch.to_dict(),
+            'total_high_xwoba_pct': total_high_xwoba_pct,
+            'high_xwoba_by_pitch': high_xwoba_by_pitch.to_dict() if not high_xwoba_by_pitch.empty else {},
+            'hard_hit_threshold': hard_hit_threshold,
+            'xwoba_threshold': 0.350,
+            'total_batted_balls': len(batted_balls)
+        }
+    else:
+        batted_ball_stats = {'no_data': True}
+    
+    # BATTING STATS AGAINST
+    at_bats_final_pitch = df.loc[df.dropna(subset=['events']).groupby(['game_date', 'at_bat_number'])['pitch_number'].idxmax()]
+    batting_stats = {}
+    
+    if not at_bats_final_pitch.empty:
+        # Overall stats
+        overall_stats = calculate_batting_stats(at_bats_final_pitch)
+        
+        # Stats by handedness
+        if 'stand' in at_bats_final_pitch.columns:
+            stats_by_handedness = at_bats_final_pitch.groupby('stand').apply(calculate_batting_stats)
+        else:
+            stats_by_handedness = pd.DataFrame()
+        
+        # Stats by pitch type (for final pitch of at-bat)
+        stats_by_pitch = at_bats_final_pitch.groupby('pitch_name_full').apply(calculate_batting_stats)
+        
+        batting_stats = {
+            'overall_stats': overall_stats.to_dict(),
+            'stats_by_handedness': stats_by_handedness.to_dict() if not stats_by_handedness.empty else {},
+            'stats_by_pitch': stats_by_pitch.to_dict()
+        }
+    else:
+        batting_stats = {'no_data': True}
+    
+    stats['batted_ball_stats'] = batted_ball_stats
+    stats['batting_stats'] = batting_stats
+    
+    return stats
 
 def create_movement_plot(df, pitcher_name, IVB_COL, HB_COL):
     """Create the horizontal vs vertical break plot using Plotly"""
@@ -162,19 +310,43 @@ def create_frequency_plot(df, pitcher_name, pitch_summary, total_csw_pct):
 
     return fig
 
-def create_heatmap_plot(df, pitcher_name):
-    """Create the pitch location heatmap using Plotly"""
+def create_usage_by_count_plot(usage_by_count_pct):
+    """Create pitch usage by count heatmap"""
+    fig = go.Figure(data=go.Heatmap(
+        z=usage_by_count_pct.values,
+        x=usage_by_count_pct.columns,
+        y=usage_by_count_pct.index,
+        colorscale='Viridis',
+        text=usage_by_count_pct.round(1).values,
+        texttemplate="%{text}%",
+        textfont={"size": 10},
+        colorbar=dict(title="Usage %")
+    ))
+
+    fig.update_layout(
+        title='Pitch Usage by Count (%)',
+        xaxis_title='Pitch Type',
+        yaxis_title='Count',
+        width=800,
+        height=500
+    )
+
+    return fig
+
+def create_enhanced_heatmap_plot(df, pitcher_name):
+    """Create enhanced pitch location heatmap with better gradient"""
     fig = go.Figure()
 
-    # Create 2D histogram for heatmap
+    # Create more granular 2D histogram with better color scale
     fig.add_trace(go.Histogram2d(
         x=df['plate_x'],
         y=df['plate_z'],
-        colorscale='Blues',
+        colorscale=[[0, 'blue'], [0.3, 'lightblue'], [0.6, 'yellow'], [0.8, 'orange'], [1, 'red']],
         showscale=True,
-        colorbar=dict(title="Pitch Density"),
-        nbinsx=30,
-        nbinsy=30
+        colorbar=dict(title="Pitch Density", titleside="right"),
+        nbinsx=40,  # More granular
+        nbinsy=40,  # More granular
+        hovertemplate='<b>Location Density</b><br>X: %{x:.1f}"<br>Z: %{y:.1f}"<br>Count: %{z}<extra></extra>'
     ))
 
     # Add strike zone
@@ -188,18 +360,29 @@ def create_heatmap_plot(df, pitcher_name):
         type="rect",
         x0=strike_zone_x[0], y0=strike_zone_z[0],
         x1=strike_zone_x[1], y1=strike_zone_z[1],
-        line=dict(color="red", width=3, dash="dash"),
+        line=dict(color="black", width=3),
         fillcolor="rgba(0,0,0,0)"
     )
 
+    # Add plate
+    plate_width = 17.0
+    fig.add_shape(
+        type="rect",
+        x0=-plate_width/2, y0=0,
+        x1=plate_width/2, y1=2,
+        line=dict(color="black", width=2),
+        fillcolor="rgba(139,69,19,0.3)"  # Brown plate
+    )
+
     fig.update_layout(
-        title=f"{pitcher_name} - Pitch Heatmap (Catcher's View)",
+        title=f"{pitcher_name} - Enhanced Pitch Location Heatmap (Catcher's View)",
         xaxis_title='Horizontal Location (Inches from Center)',
         yaxis_title='Vertical Location (Inches from Ground)',
-        xaxis=dict(range=[-24, 24]),
-        yaxis=dict(range=[0, 54]),
-        width=600,
-        height=600
+        xaxis=dict(range=[-30, 30]),
+        yaxis=dict(range=[-2, 60]),
+        width=700,
+        height=700,
+        plot_bgcolor='lightgray'
     )
 
     return fig
@@ -257,14 +440,20 @@ def process_data(df):
         avg_extension=('release_extension', 'mean')
     ).merge(csw_by_pitch, on='pitch_name_full').sort_values('count', ascending=False)
 
+    # Additional analysis
+    usage_by_count = analyze_pitch_usage_by_count(df)
+    detailed_stats = calculate_detailed_stats(df)
+
     return df, pitcher_name, IVB_COL, HB_COL, {
-        'pitch_summary': pitch_summary,
+        'pitch_summary': pitch_summary.to_dict('records'),
         'total_csw_pct': total_csw_pct,
         'k_pct': k_pct,
         'bb_pct': bb_pct,
         'total_pa': total_pa,
         'strikeouts': strikeouts,
-        'walks': walks
+        'walks': walks,
+        'usage_by_count': usage_by_count.to_dict(),
+        'detailed_stats': detailed_stats
     }
 
 def parse_uploaded_file(contents, filename):
@@ -281,8 +470,259 @@ def parse_uploaded_file(contents, filename):
     except Exception as e:
         return None, f"Error processing file: {str(e)}"
 
+def generate_comprehensive_pdf_report(df, pitcher_name, analysis_data):
+    """Generate comprehensive PDF report matching Streamlit version"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Get styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        textColor=colors.darkblue
+    )
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceAfter=12,
+        textColor=colors.darkblue
+    )
+    subheading_style = ParagraphStyle(
+        'CustomSubHeading',
+        parent=styles['Heading3'],
+        fontSize=14,
+        spaceAfter=10,
+        textColor=colors.black
+    )
+    
+    # Build story
+    story = []
+    
+    # Title Page
+    story.append(Paragraph(pitcher_name, title_style))
+    story.append(Paragraph("Pitching Performance Analysis Report", heading_style))
+    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Spacer(1, 0.5*inch))
+    
+    # Executive Summary
+    story.append(Paragraph("Executive Summary", heading_style))
+    
+    total_pitches = len(df)
+    unique_pitch_types = df['pitch_name_full'].nunique()
+    pitch_summary = analysis_data['pitch_summary']
+    detailed_stats = analysis_data['detailed_stats']
+    
+    summary_text = f"""
+    This report analyzes {total_pitches:,} pitches thrown by {pitcher_name}, featuring {unique_pitch_types} different pitch types. 
+    The analysis includes pitch movement profiles, usage patterns, location tendencies, and performance metrics against opposing batters.
+    
+    Key Highlights:
+    • Total Called Strike + Whiff Rate (CSW%): {analysis_data['total_csw_pct']:.1f}%
+    • Strikeout Rate (K%): {analysis_data['k_pct']:.1f}%
+    • Walk Rate (BB%): {analysis_data['bb_pct']:.1f}%
+    • Most used pitch: {pitch_summary[0]['pitch_name_full']} ({pitch_summary[0]['count']} pitches)
+    • Average velocity across all pitches: {df['release_speed'].mean():.1f} mph
+    """
+    
+    # Add batted ball stats if available
+    if 'no_data' not in detailed_stats['batted_ball_stats']:
+        bb_stats = detailed_stats['batted_ball_stats']
+        summary_text += f"""
+    • Hard hit rate allowed: {bb_stats['total_hard_hit_pct']:.1f}%
+    • Total batted balls: {bb_stats['total_batted_balls']}
+        """
+        if bb_stats['total_high_xwoba_pct'] > 0:
+            summary_text += f"    • High xwOBA rate allowed: {bb_stats['total_high_xwoba_pct']:.1f}%"
+    
+    # Add batting stats if available
+    if 'no_data' not in detailed_stats['batting_stats']:
+        batting_stats = detailed_stats['batting_stats']['overall_stats']
+        summary_text += f"""
+    • Opponent batting average: {batting_stats['AVG']:.3f}
+    • Opponent OPS: {batting_stats['OPS']:.3f}
+        """
+    
+    story.append(Paragraph(summary_text, styles['Normal']))
+    story.append(Spacer(1, 12))
+    
+    # Key Metrics Table
+    summary_data = [
+        ['Metric', 'Value'],
+        ['Total Pitches', f"{total_pitches:,}"],
+        ['CSW%', f"{analysis_data['total_csw_pct']:.1f}%"],
+        ['K%', f"{analysis_data['k_pct']:.1f}%"],
+        ['BB%', f"{analysis_data['bb_pct']:.1f}%"],
+        ['Average Velocity', f"{df['release_speed'].mean():.1f} mph"],
+        ['Pitch Types', str(unique_pitch_types)],
+        ['Strike Rate', f"{detailed_stats['strike_rate']:.1f}%"],
+        ['First Strike %', f"{detailed_stats['first_strike_pct']:.1f}%"]
+    ]
+    
+    summary_table = Table(summary_data)
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(summary_table)
+    story.append(PageBreak())
+    
+    # Pitch Breakdown
+    story.append(Paragraph("Pitch Type Breakdown", heading_style))
+    
+    pitch_data = [['Pitch Type', 'Count', 'Usage %', 'Avg Velocity', 'CSW%', 'Avg Spin']]
+    
+    for pitch_info in pitch_summary:
+        usage_pct = (pitch_info['count'] / total_pitches) * 100
+        pitch_data.append([
+            pitch_info['pitch_name_full'],
+            str(pitch_info['count']),
+            f"{usage_pct:.1f}%",
+            f"{pitch_info['avg_velocity']:.1f} mph",
+            f"{pitch_info['csw_pct']:.1f}%",
+            f"{pitch_info['avg_spin_rate']:.0f} rpm"
+        ])
+    
+    pitch_table = Table(pitch_data)
+    pitch_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(pitch_table)
+    story.append(PageBreak())
+    
+    # Batted Ball Analysis
+    if 'no_data' not in detailed_stats['batted_ball_stats']:
+        story.append(Paragraph("Batted Ball Analysis", heading_style))
+        bb_stats = detailed_stats['batted_ball_stats']
+        
+        bb_text = f"""
+        Analysis of {bb_stats['total_batted_balls']} batted balls:
+        
+        • Hard Hit Rate (≥95 mph): {bb_stats['total_hard_hit_pct']:.1f}%
+        • High xwOBA Rate (≥0.350): {bb_stats['total_high_xwoba_pct']:.1f}%
+        
+        Hard Hit Rate by Pitch Type:
+        """
+        
+        story.append(Paragraph(bb_text, styles['Normal']))
+        
+        # Hard hit by pitch table
+        if bb_stats['hard_hit_by_pitch']:
+            hh_data = [['Pitch Type', 'Hard Hit %']]
+            for pitch, rate in bb_stats['hard_hit_by_pitch'].items():
+                hh_data.append([pitch, f"{rate:.1f}%"])
+            
+            hh_table = Table(hh_data)
+            hh_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(hh_table)
+        
+        story.append(PageBreak())
+    
+    # Opponent Batting Performance
+    if 'no_data' not in detailed_stats['batting_stats']:
+        story.append(Paragraph("Opponent Batting Performance", heading_style))
+        batting_stats = detailed_stats['batting_stats']
+        
+        # Overall stats
+        story.append(Paragraph("Overall Statistics", subheading_style))
+        overall = batting_stats['overall_stats']
+        
+        overall_data = [
+            ['Statistic', 'Value'],
+            ['Plate Appearances', str(int(overall['PA']))],
+            ['At Bats', str(int(overall['AB']))],
+            ['Hits', str(int(overall['H']))],
+            ['Batting Average', f"{overall['AVG']:.3f}"],
+            ['On-Base Percentage', f"{overall['OBP']:.3f}"],
+            ['Slugging Percentage', f"{overall['SLG']:.3f}"],
+            ['OPS', f"{overall['OPS']:.3f}"]
+        ]
+        
+        overall_table = Table(overall_data)
+        overall_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        story.append(overall_table)
+        story.append(Spacer(1, 12))
+        
+        # By handedness if available
+        if batting_stats['stats_by_handedness']:
+            story.append(Paragraph("Performance vs Batter Handedness", subheading_style))
+            
+            hand_data = [['Handedness', 'PA', 'AVG', 'OBP', 'SLG', 'OPS']]
+            for hand, stats in batting_stats['stats_by_handedness'].items():
+                hand_data.append([
+                    'Left' if hand == 'L' else 'Right',
+                    str(int(stats['PA'])),
+                    f"{stats['AVG']:.3f}",
+                    f"{stats['OBP']:.3f}",
+                    f"{stats['SLG']:.3f}",
+                    f"{stats['OPS']:.3f}"
+                ])
+            
+            hand_table = Table(hand_data)
+            hand_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            
+            story.append(hand_table)
+    
+    # Footer
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(f"Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Paragraph("Generated by Datanalytics.pro Pitcher Profiler", styles['Normal']))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
 def init_dash_app(server, route_prefix):
-    """Initialize the Dash app"""
+    """Initialize the complete enhanced Dash app"""
     
     app = dash.Dash(
         __name__,
@@ -296,11 +736,16 @@ def init_dash_app(server, route_prefix):
     app.layout = dbc.Container([
         dcc.Store(id='processed-data-store'),
         dcc.Store(id='pitcher-name-store'),
+        dcc.Download(id="download-pdf"),
         
-        # Header
+        # Header with navigation
         dbc.Row([
             dbc.Col([
-                html.H1("⚾ Baseball Pitch Profiler", className="text-center mb-4 text-primary"),
+                html.Div([
+                    html.A("← Back to Dashboard", href="/dashboard/", className="btn btn-outline-secondary btn-sm me-2"),
+                    html.A("← Pitcher Profiler Home", href="/dashboard/pitch_profiler/", className="btn btn-outline-primary btn-sm"),
+                ], className="mb-3"),
+                html.H1("Baseball Pitcher Profiler", className="text-center mb-4 text-primary"),
                 html.P("Upload your Statcast CSV data to generate comprehensive pitching analysis", 
                        className="text-center text-muted mb-4")
             ])
@@ -360,9 +805,9 @@ def init_dash_app(server, route_prefix):
                 dbc.Col([
                     dbc.Card([
                         dbc.CardBody([
-                            html.H4("📄 Generate Report"),
-                            html.P("Create a comprehensive PDF report with all analysis and visualizations."),
-                            dbc.Button("Generate PDF Report", id="generate-pdf-btn", color="primary", className="me-2"),
+                            html.H4("📄 Complete Report"),
+                            html.P("Generate a comprehensive PDF report with all analysis, visualizations, batted ball stats, and opponent batting performance."),
+                            dbc.Button("🎯 Generate Complete PDF Report", id="generate-pdf-btn", color="primary", className="me-2"),
                             html.Div(id="pdf-status")
                         ])
                     ])
@@ -392,7 +837,7 @@ def init_dash_app(server, route_prefix):
         try:
             df_processed, pitcher_name, IVB_COL, HB_COL, analysis_data = process_data(df)
             
-            # Store processed data
+            # Store processed data - ensure all data is JSON serializable
             stored_data = {
                 'df': df_processed.to_json(date_format='iso', orient='split'),
                 'IVB_COL': IVB_COL,
@@ -423,26 +868,89 @@ def init_dash_app(server, route_prefix):
         df = pd.read_json(io.StringIO(stored_data['df']), orient='split')
         analysis = stored_data['analysis']
         
-        return dbc.Row([
-            dbc.Col([
-                html.H2(f"📊 Analysis for: {pitcher_name}", className="text-primary mb-3")
-            ], width=12)
-        ] + [
-            dbc.Col([
-                dbc.Card([
-                    dbc.CardBody([
-                        html.H4(str(value), className="text-primary mb-0"),
-                        html.P(label, className="text-muted mb-0")
+        # Additional metrics
+        detailed_stats = analysis['detailed_stats']
+        
+        return html.Div([
+            dbc.Row([
+                dbc.Col([
+                    html.H2(f"📊 Analysis for: {pitcher_name}", className="text-primary mb-3")
+                ], width=12)
+            ]),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(str(len(df)), className="text-primary mb-0"),
+                            html.P("Total Pitches", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(f"{analysis['total_csw_pct']:.1f}%", className="text-primary mb-0"),
+                            html.P("CSW%", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(f"{analysis['k_pct']:.1f}%", className="text-primary mb-0"),
+                            html.P("K%", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(f"{analysis['bb_pct']:.1f}%", className="text-primary mb-0"),
+                            html.P("BB%", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(f"{df['release_speed'].mean():.1f} mph", className="text-primary mb-0"),
+                            html.P("Avg Velocity", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2),
+                dbc.Col([
+                    dbc.Card([
+                        dbc.CardBody([
+                            html.H4(str(df['pitch_name_full'].nunique()), className="text-primary mb-0"),
+                            html.P("Pitch Types", className="text-muted mb-0")
+                        ])
+                    ])
+                ], width=2)
+            ], className="mb-3"),
+            
+            # Additional detailed metrics
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("📈 Detailed Statistics", className="mb-3"),
+                    dbc.Row([
+                        dbc.Col([
+                            html.P(f"• Total Plate Appearances: {analysis['total_pa']}", className="mb-1"),
+                            html.P(f"• Total Strikeouts: {analysis['strikeouts']}", className="mb-1"),
+                            html.P(f"• Total Walks: {analysis['walks']}", className="mb-1"),
+                        ], width=4),
+                        dbc.Col([
+                            html.P(f"• Strike Rate: {detailed_stats['strike_rate']:.1f}%", className="mb-1"),
+                            html.P(f"• First Strike %: {detailed_stats['first_strike_pct']:.1f}%", className="mb-1"),
+                            html.P(f"• Swinging Strike Rate: {detailed_stats['swinging_strike_rate']:.1f}%", className="mb-1"),
+                        ], width=4),
+                        dbc.Col([
+                            html.P(f"• Zone Rate: {detailed_stats.get('zone_rate', 'N/A'):.1f}%" if isinstance(detailed_stats.get('zone_rate'), (int, float)) else "• Zone Rate: N/A", className="mb-1"),
+                            html.P(f"• Max Velocity: {detailed_stats['max_velocity']:.1f} mph", className="mb-1"),
+                            html.P(f"• Min Velocity: {detailed_stats['min_velocity']:.1f} mph", className="mb-1"),
+                        ], width=4)
                     ])
                 ])
-            ], width=2) for label, value in [
-                ("Total Pitches", len(df)),
-                ("CSW%", f"{analysis['total_csw_pct']:.1f}%"),
-                ("K%", f"{analysis['k_pct']:.1f}%"),
-                ("BB%", f"{analysis['bb_pct']:.1f}%"),
-                ("Avg Velocity", f"{df['release_speed'].mean():.1f} mph"),
-                ("Pitch Types", df['pitch_name_full'].nunique())
-            ]
+            ], className="mb-3")
         ])
 
     @app.callback(
@@ -465,13 +973,22 @@ def init_dash_app(server, route_prefix):
             return dcc.Graph(figure=fig, style={'height': '800px'})
             
         elif active_tab == "usage":
-            fig = create_frequency_plot(df, pitcher_name, analysis['pitch_summary'], analysis['total_csw_pct'])
+            # Convert pitch_summary back to DataFrame for plotting
+            pitch_summary_df = pd.DataFrame(analysis['pitch_summary'])
+            fig1 = create_frequency_plot(df, pitcher_name, pitch_summary_df, analysis['total_csw_pct'])
             
-            # Convert pitch summary to display table
-            display_summary = analysis['pitch_summary'].round(1)
+            # Create usage by count plot
+            usage_by_count_df = pd.DataFrame(analysis['usage_by_count'])
+            fig2 = create_usage_by_count_plot(usage_by_count_df)
+            
+            # Round values for display
+            display_summary = pitch_summary_df.round(1)
             
             return html.Div([
-                dcc.Graph(figure=fig, style={'height': '600px'}),
+                dcc.Graph(figure=fig1, style={'height': '600px'}),
+                html.Hr(),
+                dcc.Graph(figure=fig2, style={'height': '500px'}),
+                html.Hr(),
                 html.H4("Pitch Summary Table", className="mt-4"),
                 dash_table.DataTable(
                     data=display_summary.to_dict('records'),
@@ -488,28 +1005,174 @@ def init_dash_app(server, route_prefix):
             ])
             
         elif active_tab == "location":
-            fig = create_heatmap_plot(df, pitcher_name)
-            return dcc.Graph(figure=fig, style={'height': '600px'})
+            fig = create_enhanced_heatmap_plot(df, pitcher_name)
+            return html.Div([
+                dcc.Graph(figure=fig, style={'height': '700px'}),
+                html.Div([
+                    html.H5("Location Analysis", className="mt-4"),
+                    html.P("• Red areas indicate higher pitch density"),
+                    html.P("• Blue areas indicate lower pitch density"),
+                    html.P("• Black rectangle shows the strike zone"),
+                    html.P("• Brown rectangle shows home plate")
+                ], className="mt-3")
+            ])
             
         elif active_tab == "stats":
-            return html.Div([
-                html.H4("Detailed Statistics"),
-                html.P("Additional statistical analysis will be displayed here."),
-                dbc.Alert("More detailed statistics coming soon!", color="info")
+            detailed_stats = analysis['detailed_stats']
+            
+            components = []
+            
+            # Basic Statistics Section
+            components.extend([
+                html.H4("Basic Statistics", className="mb-3"),
+                dash_table.DataTable(
+                    data=[
+                        {"Metric": "Total Pitches", "Value": f"{detailed_stats['total_pitches']:,}"},
+                        {"Metric": "Total Strikes", "Value": f"{detailed_stats['total_strikes']:,}"},
+                        {"Metric": "Total Balls", "Value": f"{detailed_stats['total_balls']:,}"},
+                        {"Metric": "Strike Rate", "Value": f"{detailed_stats['strike_rate']:.1f}%"},
+                        {"Metric": "First Strike %", "Value": f"{detailed_stats['first_strike_pct']:.1f}%"},
+                        {"Metric": "Swinging Strike Rate", "Value": f"{detailed_stats['swinging_strike_rate']:.1f}%"}
+                    ],
+                    columns=[{"name": "Metric", "id": "Metric"}, {"name": "Value", "id": "Value"}],
+                    style_cell={'textAlign': 'left'},
+                    style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
+                ),
+                html.Hr()
             ])
+            
+            # Batted Ball Analysis Section
+            if 'no_data' not in detailed_stats['batted_ball_stats']:
+                bb_stats = detailed_stats['batted_ball_stats']
+                components.extend([
+                    html.H4("🏏 Batted Ball Analysis", className="mb-3"),
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.H3(f"{bb_stats['total_hard_hit_pct']:.1f}%", className="text-danger mb-0"),
+                                    html.P("Hard Hit Rate", className="text-muted mb-0"),
+                                    html.Small(f"(≥{bb_stats['hard_hit_threshold']} mph)")
+                                ])
+                            ])
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.H3(f"{bb_stats['total_high_xwoba_pct']:.1f}%", className="text-warning mb-0"),
+                                    html.P("High xwOBA Rate", className="text-muted mb-0"),
+                                    html.Small(f"(≥{bb_stats['xwoba_threshold']:.3f})")
+                                ])
+                            ])
+                        ], width=4),
+                        dbc.Col([
+                            dbc.Card([
+                                dbc.CardBody([
+                                    html.H3(f"{bb_stats['total_batted_balls']}", className="text-info mb-0"),
+                                    html.P("Total Batted Balls", className="text-muted mb-0")
+                                ])
+                            ])
+                        ], width=4)
+                    ], className="mb-3"),
+                    
+                    html.H5("Hard Hit % by Pitch Type"),
+                    dash_table.DataTable(
+                        data=[{"Pitch Type": pitch, "Hard Hit %": f"{rate:.1f}%"} 
+                              for pitch, rate in bb_stats['hard_hit_by_pitch'].items()],
+                        columns=[{"name": "Pitch Type", "id": "Pitch Type"}, {"name": "Hard Hit %", "id": "Hard Hit %"}],
+                        style_cell={'textAlign': 'center'},
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
+                    ),
+                    html.Hr()
+                ])
+            
+            # Opponent Batting Performance Section
+            if 'no_data' not in detailed_stats['batting_stats']:
+                batting_stats = detailed_stats['batting_stats']
+                components.extend([
+                    html.H4("🏏 Opponent Batting Performance", className="mb-3"),
+                    
+                    html.H5("Overall Statistics"),
+                    dash_table.DataTable(
+                        data=[
+                            {"Statistic": "Plate Appearances", "Value": str(int(batting_stats['overall_stats']['PA']))},
+                            {"Statistic": "At Bats", "Value": str(int(batting_stats['overall_stats']['AB']))},
+                            {"Statistic": "Hits", "Value": str(int(batting_stats['overall_stats']['H']))},
+                            {"Statistic": "Batting Average", "Value": f"{batting_stats['overall_stats']['AVG']:.3f}"},
+                            {"Statistic": "On-Base Percentage", "Value": f"{batting_stats['overall_stats']['OBP']:.3f}"},
+                            {"Statistic": "Slugging Percentage", "Value": f"{batting_stats['overall_stats']['SLG']:.3f}"},
+                            {"Statistic": "OPS", "Value": f"{batting_stats['overall_stats']['OPS']:.3f}"}
+                        ],
+                        columns=[{"name": "Statistic", "id": "Statistic"}, {"name": "Value", "id": "Value"}],
+                        style_cell={'textAlign': 'left'},
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
+                    ),
+                    
+                    html.Hr(),
+                    
+                    # By handedness if available
+                    html.H5("Performance vs Batter Handedness") if batting_stats['stats_by_handedness'] else html.Div(),
+                    dash_table.DataTable(
+                        data=[
+                            {
+                                "Handedness": "Left" if hand == "L" else "Right",
+                                "PA": str(int(stats['PA'])),
+                                "AVG": f"{stats['AVG']:.3f}",
+                                "OBP": f"{stats['OBP']:.3f}", 
+                                "SLG": f"{stats['SLG']:.3f}",
+                                "OPS": f"{stats['OPS']:.3f}"
+                            }
+                            for hand, stats in batting_stats['stats_by_handedness'].items()
+                        ],
+                        columns=[
+                            {"name": "Handedness", "id": "Handedness"},
+                            {"name": "PA", "id": "PA"},
+                            {"name": "AVG", "id": "AVG"},
+                            {"name": "OBP", "id": "OBP"},
+                            {"name": "SLG", "id": "SLG"},
+                            {"name": "OPS", "id": "OPS"}
+                        ],
+                        style_cell={'textAlign': 'center'},
+                        style_header={'backgroundColor': 'rgb(230, 230, 230)', 'fontWeight': 'bold'}
+                    ) if batting_stats['stats_by_handedness'] else html.Div()
+                ])
+            
+            return html.Div(components)
         
         return ""
 
     @app.callback(
-        Output('pdf-status', 'children'),
+        [Output('pdf-status', 'children'),
+         Output('download-pdf', 'data')],
         [Input('generate-pdf-btn', 'n_clicks')],
         [State('processed-data-store', 'data'),
          State('pitcher-name-store', 'data')]
     )
-    def generate_pdf_report(n_clicks, stored_data, pitcher_name):
+    def generate_pdf_report_callback(n_clicks, stored_data, pitcher_name):
         if not n_clicks or not stored_data:
-            return ""
+            return "", None
         
-        return dbc.Alert("PDF generation is being implemented. Check back soon!", color="info")
+        try:
+            df = pd.read_json(io.StringIO(stored_data['df']), orient='split')
+            analysis = stored_data['analysis']
+            
+            # Generate comprehensive PDF
+            pdf_buffer = generate_comprehensive_pdf_report(df, pitcher_name, analysis)
+            
+            # Create download data
+            download_data = dict(
+                content=base64.b64encode(pdf_buffer.getvalue()).decode(),
+                filename=f"comprehensive_pitch_report_{pitcher_name.replace(' ', '_').replace(',', '')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                type="application/pdf",
+                base64=True
+            )
+            
+            success_msg = dbc.Alert("✅ Comprehensive PDF report generated successfully! Download should start automatically.", color="success")
+            
+            return success_msg, download_data
+            
+        except Exception as e:
+            error_msg = dbc.Alert(f"❌ Error generating comprehensive PDF report: {str(e)}", color="danger")
+            return error_msg, None
 
     return app

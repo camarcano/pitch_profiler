@@ -6,14 +6,15 @@ Flask blueprint for the pitch profiler module
 
 from flask import Blueprint, render_template, current_app
 from flask_login import login_required
+import os
 
-# Create blueprint
+# Create blueprint - template folder path will be set correctly by the module manager
+# Remove url_prefix since it's set during registration
 bp = Blueprint(
     'pitch_profiler',
     __name__,
     template_folder='templates',
-    static_folder='static',
-    url_prefix='/pitch_profiler'
+    static_folder='static'
 )
 
 @bp.route('/')
